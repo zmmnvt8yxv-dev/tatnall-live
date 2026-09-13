@@ -36,9 +36,11 @@ def digest(value):
 
 
 def fetch(url):
-    request = Request(url, headers={'User-Agent': 'TatnallLegacy/1.0 (personal league scoreboard)'})
+    request = Request(url, headers={'User-Agent': 'Mozilla/5.0 (compatible; TatnallLegacy/1.0)', 'Accept': 'application/rss+xml, application/xml, text/xml' if url == NEWS else 'application/json'})
     with urlopen(request, timeout=20) as response:
         body = response.read(MAX_BYTES + 1)
+        if url == NEWS:
+            print(f'News response: HTTP {response.status}; bytes {len(body)}')
         if len(body) > MAX_BYTES:
             raise ValueError('Response limit exceeded')
         return body
@@ -228,7 +230,7 @@ def main():
     try:
         result['news'] = parse_news(fetch(NEWS), captured)
     except Exception as error:
-        print('News unavailable: ' + type(error).__name__ + (' HTTP ' + str(error.code) if hasattr(error, 'code') else ''))
+        print('News unavailable: ' + type(error).__name__ + (' code ' + str(error.code) if hasattr(error, 'code') else ''))
         result['news'] = {'source': 'ESPN', 'status': 'unavailable', 'capturedAt': None, 'items': []}
     validate(result, catalog)
     output = Path('site'); output.mkdir(exist_ok=True)
