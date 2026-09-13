@@ -227,7 +227,8 @@ def main():
     result = project(config, catalog, league, state, rosters, matchups, transactions, captured)
     try:
         result['news'] = parse_news(fetch(NEWS), captured)
-    except Exception:
+    except Exception as error:
+        print('News unavailable: ' + type(error).__name__ + (' HTTP ' + str(error.code) if hasattr(error, 'code') else ''))
         result['news'] = {'source': 'ESPN', 'status': 'unavailable', 'capturedAt': None, 'items': []}
     validate(result, catalog)
     output = Path('site'); output.mkdir(exist_ok=True)
