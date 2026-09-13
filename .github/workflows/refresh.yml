@@ -1,0 +1,42 @@
+name: Refresh canonical league feed
+on:
+  schedule:
+    - cron: '2-57/5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: canonical-feed-pages
+  cancel-in-progress: false
+jobs:
+  refresh:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.REFRESH_ENABLED == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: https://zmmnvt8yxv-dev.github.io/tatnall-live/
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Test projection, failure and privacy boundaries
+        run: python3 -m unittest discover -p 'test_*.py'
+      - name: Fetch and validate canonical current data
+        env:
+          SOURCE_MAP: ${{ secrets.SOURCE_MAP }}
+        run: python3 refresh.py
+      - name: Upload only the small validated public feed
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        with:
+          path: site
+          retention-days: 1
+      - name: Publish current feed atomically
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+      - name: Remove temporary output
+        if: always()
+        run: rm -rf site
