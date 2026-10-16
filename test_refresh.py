@@ -1,6 +1,7 @@
 import copy
+import json
 import unittest
-from refresh import project, parse_news, validate
+from refresh import project, parse_news, parse_news_json, validate
 from uuid import uuid5, NAMESPACE_URL
 
 
@@ -51,5 +52,31 @@ class RefreshTests(unittest.TestCase):
         xml=b'<rss><channel><item><title>NFL update</title><link>https://www.espn.com/nfl/story/_/id/123/example</link><pubDate>Sun, 13 Sep 2026 17:00:00 GMT</pubDate></item></channel></rss>'
         self.assertEqual(parse_news(xml,'2026-09-13T17:00:00Z')['items'][0]['title'],'NFL update')
         with self.assertRaises(ValueError):parse_news(xml.replace(b'www.espn.com',b'evil.example'),'2026-09-13T17:00:00Z')
+
+    def test_json_news_fallback_validates_original_espn_links(self):
+        article = {
+            'headline': 'NFL update',
+            'published': '2026-10-16T17:57:01Z',
+            'links': {'web': {'href': 'https://www.espn.com/nfl/story/_/id/123/example'}}
+        }
+        payload = json.dumps({'articles': [article]}).encode()
+        result = parse_news_json(payload, '2026-10-16T18:00:00Z')
+        self.assertEqual(result['source'], 'ESPN')
+        self.assertEqual(result['status'], 'available')
+        self.assertEqual(result['items'][0]['publishedAt'], '2026-10-16T17:57:01Z')
+        self.assertEqual(result['items'][0]['title'], 'NFL update')
+        with self.assertRaises(ValueError):
+            parse_news_json(json.dumps({'articles': [{**article, 'links': {'web': {'href': 'https://evil.example/'}}}]}).encode(),
+                            '2026-10-16T18:00:00Z')
+
+    def test_json_news_skips_one_invalid_item_and_keeps_safe_item(self):
+        rows = [
+            {'headline': '<script>alert(1)</script>', 'published': '2026-10-16T17:00:00Z',
+             'links': {'web': {'href': 'https://www.espn.com/unsafe'}}},
+            {'headline': 'Good news', 'published': '2026-10-16T17:01:00Z',
+             'links': {'web': {'href': 'https://www.espn.com/nfl/story/_/id/2/test'}}}
+        ]
+        self.assertEqual([r['title'] for r in parse_news_json(json.dumps({'articles': rows}).encode(),
+                           '2026-10-16T18:00:00Z')['items']], ['Good news'])
 
 if __name__=='__main__':unittest.main()

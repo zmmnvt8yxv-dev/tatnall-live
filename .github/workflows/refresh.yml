@@ -2,7 +2,7 @@ name: Refresh canonical league feed
 on:
   push:
     branches: [main]
-    paths: [".github/workflows/refresh.yml"]
+    paths: [".github/workflows/refresh.yml", "refresh.py", "test_refresh.py"]
   schedule:
     - cron: '2-57/5 * * * *'
   workflow_dispatch:

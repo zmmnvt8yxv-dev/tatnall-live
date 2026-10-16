@@ -13,3 +13,8 @@ A small, canonical-only companion to the free TatnallLegacy GitHub Pages site. T
 - To pause: disable `refresh.yml` in Actions. To roll back: disable the feed workflow, roll the website back to artifact commit `eebbe123140570070395c5139cfc4bf4165eaa33`; archive and exact historical release pins remain unchanged. Re-enable only after tests/source checks pass. GitHub may disable public schedules after 60 days without repository activity; check Actions if the source is delayed.
 
 Sources: https://docs.sleeper.com/ ; https://www.espn.com/espn/news/story?page=rssinfo ; https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax ; https://docs.github.com/en/billing/concepts/product-billing/github-actions
+
+
+## NFL news fallback
+
+The refresh prefers ESPN's original official RSS headlines. When the RSS endpoint returns an empty response on GitHub-hosted runners, the producer tries ESPN's public NFL headlines JSON endpoint. Both paths publish only validated title, original `https://www.espn.com/` article or video link, and ISO publication date; no stories, photos, third-party mirrors, identity joins, or private provider data. Unsafe or malformed article records are dropped individually, and the news section is marked `unavailable` if neither feed produces valid records. Unit tests cover the fallback's allowlist and unsafe-text rejection. The source is an ESPN-operated but unofficial JSON endpoint and can change without notice.
