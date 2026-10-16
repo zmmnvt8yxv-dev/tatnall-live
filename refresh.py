@@ -24,6 +24,7 @@ import zlib
 NAMESPACE = UUID('03f007fb-1dc9-562f-85ae-6f82257f50eb')
 API = 'https://api.sleeper.app/v1/'
 NEWS = 'https://www.espn.com/espn/rss/nfl/news'
+NEWS_JSON = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/news?limit=20'
 MAX_BYTES = 2_000_000
 
 
@@ -90,6 +91,39 @@ def parse_news(body, captured):
         rows.append({'title': title, 'url': url, 'publishedAt': published})
     if not rows:
         raise ValueError('Empty news feed')
+    return {'source': 'ESPN', 'status': 'available', 'capturedAt': captured, 'items': rows}
+
+
+def parse_news_json(body, captured):
+    # When ESPN's RSS endpoint returns empty HTTP 202 on runners, use the
+    # same publisher's NFL headlines JSON. Strictly retain original ESPN
+    # headlines, published dates and links; no article bodies or images.
+    raw = json.loads(body)
+    if not isinstance(raw, dict) or not isinstance(raw.get('articles'), list):
+        raise ValueError('Invalid ESPN news response')
+    rows = []
+    for item in raw['articles'][:20]:
+        if not isinstance(item, dict):
+            continue
+        try:
+            title = safe_text(item.get('headline') or '')
+            link = item.get('links', {}).get('web')
+            url = link.get('href') if isinstance(link, dict) else None
+            parsed = urlparse(url or '')
+            if not title or parsed.scheme != 'https' or parsed.hostname not in ('www.espn.com', 'espn.com') or parsed.username or parsed.password:
+                raise ValueError('Unapproved ESPN news item')
+            stamp = item.get('published')
+            if not isinstance(stamp, str):
+                raise ValueError('Missing ESPN publication date')
+            when = datetime.fromisoformat(stamp.replace('Z', '+00:00'))
+            if when.tzinfo is None:
+                raise ValueError('Unzoned ESPN publication date')
+            rows.append({'title': title, 'url': url, 'publishedAt': iso(when)})
+        except (ValueError, TypeError, AttributeError):
+            # Skip the one malformed/unsafe item, not the entire safe feed.
+            continue
+    if not rows:
+        raise ValueError('Empty ESPN JSON news feed')
     return {'source': 'ESPN', 'status': 'available', 'capturedAt': captured, 'items': rows}
 
 
@@ -230,8 +264,12 @@ def main():
     try:
         result['news'] = parse_news(fetch(NEWS), captured)
     except Exception as error:
-        print('News unavailable: ' + type(error).__name__ + (' code ' + str(error.code) if hasattr(error, 'code') else ''))
-        result['news'] = {'source': 'ESPN', 'status': 'unavailable', 'capturedAt': None, 'items': []}
+        print('News RSS unavailable: ' + type(error).__name__ + (' code ' + str(error.code) if hasattr(error, 'code') else ''))
+        try:
+            result['news'] = parse_news_json(fetch(NEWS_JSON), captured)
+        except Exception as fallback_error:
+            print('News JSON unavailable: ' + type(fallback_error).__name__ + (' code ' + str(fallback_error.code) if hasattr(fallback_error, 'code') else ''))
+            result['news'] = {'source': 'ESPN', 'status': 'unavailable', 'capturedAt': None, 'items': []}
     validate(result, catalog)
     output = Path('site'); output.mkdir(exist_ok=True)
     (output / 'snapshot.json').write_bytes(encode(result) + b'\n')
