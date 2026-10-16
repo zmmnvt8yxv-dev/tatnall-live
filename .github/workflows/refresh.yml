@@ -1,5 +1,8 @@
 name: Refresh canonical league feed
 on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/refresh.yml"]
   schedule:
     - cron: '2-57/5 * * * *'
   workflow_dispatch:
@@ -34,9 +37,12 @@ jobs:
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: site
+          name: github-pages-${{ github.run_attempt }}
           retention-days: 1
       - name: Publish current feed atomically
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
       - name: Remove temporary output
         if: always()
         run: rm -rf site
